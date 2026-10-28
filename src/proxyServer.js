@@ -36,16 +36,21 @@ class ProxyServer {
         const iface = interfaceManager.getNextInterface();
         const parsedUrl = url.parse(req.url);
 
+        const targetHost = (parsedUrl.hostname || req.headers.host || '').split(':')[0];
+        const targetPort = parsedUrl.port || 80;
+
+        const isIPv4 = iface && net.isIPv4(iface.address);
         const options = {
-          hostname: parsedUrl.hostname || req.headers.host,
-          port: parsedUrl.port || 80,
+          hostname: targetHost,
+          port: targetPort,
           path: parsedUrl.path,
           method: req.method,
           headers: req.headers,
-          localAddress: iface ? iface.address : undefined
+          localAddress: iface ? iface.address : undefined,
+          family: isIPv4 ? 4 : undefined
         };
 
-        this.logRequest(options.hostname, iface, 0, false);
+        this.logRequest(targetHost, iface, 0, false);
 
         const proxyReq = http.request(options, (proxyRes) => {
           res.writeHead(proxyRes.statusCode, proxyRes.headers);
@@ -53,6 +58,20 @@ class ProxyServer {
         });
 
         proxyReq.on('error', (err) => {
+          // Fallback without localAddress if interface binding fails
+          if (options.localAddress) {
+            const fallbackOptions = { ...options, localAddress: undefined, family: undefined };
+            const fallbackReq = http.request(fallbackOptions, (fallbackRes) => {
+              res.writeHead(fallbackRes.statusCode, fallbackRes.headers);
+              fallbackRes.pipe(res, { end: true });
+            });
+            fallbackReq.on('error', (fbErr) => {
+              res.writeHead(502, { 'Content-Type': 'text/plain' });
+              res.end(`TurboBond Bad Gateway: ${fbErr.message}`);
+            });
+            req.pipe(fallbackReq, { end: true });
+            return;
+          }
           res.writeHead(502, { 'Content-Type': 'text/plain' });
           res.end(`TurboBond Bad Gateway: ${err.message}`);
         });
@@ -64,39 +83,55 @@ class ProxyServer {
       this.server.on('connect', (req, clientSocket, head) => {
         this.activeConnections++;
         const iface = interfaceManager.getNextInterface();
-        const [host, portStr] = req.url.split(':');
-        const port = parseInt(portStr, 10) || 443;
+        const [rawHost, rawPortStr] = req.url.split(':');
+        const host = rawHost.replace(/^\[|\]$/g, ''); // strip IPv6 brackets if any
+        const port = parseInt(rawPortStr, 10) || 443;
 
         this.logRequest(host, iface, 0, true);
 
+        const isIPv4 = iface && net.isIPv4(iface.address);
         const connectOptions = {
           host,
           port,
-          localAddress: iface ? iface.address : undefined
+          localAddress: iface ? iface.address : undefined,
+          family: isIPv4 ? 4 : undefined
         };
 
-        const serverSocket = net.connect(connectOptions, () => {
+        const pipeTunnels = (serverSocket) => {
           clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
           if (head && head.length > 0) {
             serverSocket.write(head);
           }
           serverSocket.pipe(clientSocket);
           clientSocket.pipe(serverSocket);
+
+          const onClose = () => {
+            this.activeConnections = Math.max(0, this.activeConnections - 1);
+          };
+          clientSocket.on('close', onClose);
+          serverSocket.on('close', onClose);
+
+          clientSocket.on('error', () => serverSocket.destroy());
+          serverSocket.on('error', () => clientSocket.destroy());
+        };
+
+        const serverSocket = net.connect(connectOptions, () => {
+          pipeTunnels(serverSocket);
         });
 
-        serverSocket.on('error', () => {
+        serverSocket.on('error', (err) => {
+          // Fallback without localAddress if binding threw EINVAL or interface went down
+          if (connectOptions.localAddress) {
+            const fallbackSocket = net.connect({ host, port }, () => {
+              pipeTunnels(fallbackSocket);
+            });
+            fallbackSocket.on('error', () => {
+              clientSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+            });
+            return;
+          }
           clientSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
         });
-
-        clientSocket.on('error', () => {
-          serverSocket.destroy();
-        });
-
-        const onClose = () => {
-          this.activeConnections = Math.max(0, this.activeConnections - 1);
-        };
-        clientSocket.on('close', onClose);
-        serverSocket.on('close', onClose);
       });
 
       this.server.listen(this.port, '127.0.0.1', () => {
