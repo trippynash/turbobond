@@ -1,0 +1,31 @@
+{
+  "name": "turbobond",
+  "version": "1.0.0",
+  "description": "High-Performance Multi-WAN Bandwidth Aggregator and USB Tethering Manager for macOS",
+  "main": "src/index.js",
+  "bin": {
+    "turbobond": "./bin/turbobond.js"
+  },
+  "scripts": {
+    "start": "node ./bin/turbobond.js --open",
+    "cli": "node ./bin/turbobond.js",
+    "setup:tether": "bash ./scripts/setup-tetherkit.sh"
+  },
+  "keywords": [
+    "macos",
+    "multi-wan",
+    "load-balancer",
+    "bandwidth-aggregation",
+    "usb-tethering",
+    "android-tethering",
+    "iphone-tethering",
+    "tetherkit",
+    "proxy",
+    "network"
+  ],
+  "author": "Ashish",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TurboBond — macOS Multi-Link Bandwidth Aggregator</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation -->
+    <header class="top-header">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </div>
+        <div>
+          <h1>TurboBond</h1>
+          <span class="subtitle">Multi-Link Bandwidth Aggregator & USB Tethering Manager</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="proxy-badge" title="Local Multi-WAN Proxy">
+          <span class="pulse-dot"></span>
+          <span class="proxy-label">PROXY:</span>
+          <code id="proxyEndpoint">127.0.0.1:8080</code>
+          <button class="btn-copy" id="btnCopyProxy" title="Copy proxy address">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+
+        <button class="btn-secondary" id="btnSystemProxyToggle">
+          <span id="systemProxyIcon">⚙️</span>
+          <span id="systemProxyLabel">System Proxy: Off</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-content">
+      <!-- Aggregated Bandwidth Hero -->
+      <section class="hero-stats">
+        <div class="stat-card primary">
+          <div class="stat-header">
+            <span class="stat-title">TOTAL DOWNLOAD</span>
+            <div class="stat-icon down-icon">↓</div>
+          </div>
+          <div class="stat-value-group">
+            <span class="stat-number" id="totalDownSpeed">0.0</span>
+            <span class="stat-unit" id="totalDownUnit">MB/s</span>
+          </div>
+          <div class="stat-footer">
+            <span>Transferred: <strong id="totalDownBytes">0 MB</strong></span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">TOTAL UPLOAD</span>
+            <div class="stat-icon up-icon">↑</div>
+          </div>
+          <div class="stat-value-group">
+            <span class="stat-number" id="totalUpSpeed">0.0</span>
+            <span class="stat-unit" id="totalUpUnit">MB/s</span>
+          </div>
+          <div class="stat-footer">
+            <span>Transferred: <strong id="totalUpBytes">0 MB</strong></span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-header">
+            <span class="stat-title">BONDED ADAPTERS</span>
+            <div class="stat-icon link-icon">⇋</div>
+          </div>
+          <div class="stat-value-group">
+            <span class="stat-number" id="activeAdapterCount">0</span>
+            <span class="stat-unit">Online</span>
+          </div>
+          <div class="stat-footer">
+            <span>Active Streams: <strong id="activeStreamsCount">0</strong></span>
+          </div>
+        </div>
+
+        <!-- Android USB Tethering Control Widget -->
+        <div class="stat-card tether-widget">
+          <div class="stat-header">
+            <span class="stat-title">ANDROID USB TETHER</span>
+            <span class="badge" id="tetherStatusBadge">Checking...</span>
+          </div>
+          <div class="tether-info">
+            <div class="tether-device" id="tetherDeviceName">Detecting USB device...</div>
+            <div class="tether-ip" id="tetherIp">--</div>
+          </div>
+          <div class="tether-actions">
+            <button class="btn-primary" id="btnTetherToggle">Start Tethering</button>
+            <button class="btn-ghost" id="btnTetherLogs" title="View TetherKit Logs">Logs</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Adapters Grid -->
+      <section class="section">
+        <div class="section-header">
+          <div>
+            <h2>Bonded Network Interfaces</h2>
+            <p>Every active connection below is simultaneously pooled into your aggregated proxy pool.</p>
+          </div>
+          <button class="btn-outline" id="btnRefreshInterfaces">Refresh Devices</button>
+        </div>
+
+        <div class="interfaces-grid" id="interfacesGrid">
+          <!-- Dynamically populated interface cards -->
+          <div class="empty-state">Scanning active interfaces...</div>
+        </div>
+      </section>
+
+      <!-- Live Dispatch Stream & Instructions -->
+      <section class="section-grid-2">
+        <!-- Live Traffic Dispatch Stream -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Live Connection Dispatch Stream</h3>
+            <span class="badge info">Round-Robin</span>
+          </div>
+          <p class="panel-desc">Real-time log of HTTP/HTTPS streams distributed across your devices.</p>
+          <div class="log-stream-container" id="streamLog">
+            <div class="stream-item empty">Waiting for network traffic through proxy...</div>
+          </div>
+        </div>
+
+        <!-- Quick Setup & How to Use -->
+        <div class="panel">
+          <div class="panel-header">
+            <h3>Quick Setup Guide</h3>
+            <span class="badge success">Active on 8080</span>
+          </div>
+          <div class="setup-guide">
+            <div class="guide-item">
+              <span class="guide-num">1</span>
+              <div>
+                <strong>NeatDownloadManager (Speed Multiplier)</strong>
+                <p>Open NeatDownloadManager > <em>Settings > Network Proxy</em> > Check <em>Use Proxy</em>: <code>127.0.0.1</code> Port: <code>8080</code>.</p>
+              </div>
+            </div>
+
+            <div class="guide-item">
+              <span class="guide-num">2</span>
+              <div>
+                <strong>Google Chrome / Brave (YouTube & Streaming)</strong>
+                <p>Launch Chrome with multi-WAN proxy:</p>
+                <div class="code-box">
+                  <code>/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server="127.0.0.1:8080"</code>
+                  <button class="btn-copy-code" data-copy="/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server=&quot;127.0.0.1:8080&quot;">Copy</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="guide-item">
+              <span class="guide-num">3</span>
+              <div>
+                <strong>Terminal & Dev Tools (git, npm, curl)</strong>
+                <div class="code-box">
+                  <code>export ALL_PROXY=http://127.0.0.1:8080</code>
+                  <button class="btn-copy-code" data-copy="export ALL_PROXY=http://127.0.0.1:8080">Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Logs Modal -->
+    <dialog id="logsModal" class="modal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>TetherKit System Logs</h3>
+          <button class="btn-close" id="btnCloseLogs">✕</button>
+        </div>
+        <pre class="logs-content" id="logsContent">Loading logs...</pre>
+      </div>
+    </dialog>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
