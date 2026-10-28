@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { exec } = require('child_process');
+const { exec, execSync } = require('child_process');
 const { startTurboBond } = require('../src/index');
 
 const args = process.argv.slice(2);
@@ -38,9 +38,15 @@ startTurboBond({ proxyPort, dashboardPort }).then((instance) => {
     exec(`open http://localhost:${dashboardPort}`);
   }
 
-  // Graceful shutdown
+  const cleanupProxy = () => {
+    try {
+      execSync('networksetup -setwebproxystate "Wi-Fi" off 2>/dev/null && networksetup -setsecurewebproxystate "Wi-Fi" off 2>/dev/null');
+    } catch (e) {}
+  };
+
   const shutdown = () => {
     console.log('\n\x1b[1;33mStopping TurboBond services...\x1b[0m');
+    cleanupProxy();
     instance.interfaceManager.stopPolling();
     instance.proxy.stop();
     instance.dashboard.stop();

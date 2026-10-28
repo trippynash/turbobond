@@ -12,7 +12,6 @@ class DashboardServer {
     this.server = null;
     this.sseClients = [];
 
-    // Broadcast SSE updates whenever interfaceManager updates
     interfaceManager.on('statsUpdated', (stats) => {
       this.broadcastSSE(stats);
     });
@@ -29,16 +28,17 @@ class DashboardServer {
 
     const msg = `data: ${payload}\n\n`;
     for (const res of this.sseClients) {
-      res.write(msg);
+      try {
+        res.write(msg);
+      } catch (e) {}
     }
   }
 
   start() {
     return new Promise((resolve, reject) => {
       this.server = http.createServer(async (req, res) => {
-        const url = new URL(req.url, `http://${req.headers.host}`);
+        const url = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
 
-        // CORS & Headers
         res.setHeader('Access-Control-Allow-Origin', '*');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -52,10 +52,12 @@ class DashboardServer {
         if (url.pathname === '/api/stream') {
           res.writeHead(200, {
             'Content-Type': 'text/event-stream',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
           });
-          res.write('\n');
+          if (res.flushHeaders) res.flushHeaders();
+          res.write(': keepalive\n\n');
           this.sseClients.push(res);
           req.on('close', () => {
             this.sseClients = this.sseClients.filter(c => c !== res);
@@ -114,10 +116,10 @@ class DashboardServer {
           return res.end(logs);
         }
 
-        // System Proxy Toggle
+        // System Proxy Toggle (With automatic localhost bypass)
         if (url.pathname === '/api/system-proxy/enable' && req.method === 'POST') {
           const port = this.proxy.port;
-          const cmd = `networksetup -setwebproxy "Wi-Fi" 127.0.0.1 ${port} && networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 ${port}`;
+          const cmd = `networksetup -setwebproxy "Wi-Fi" 127.0.0.1 ${port} && networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 ${port} && networksetup -setproxybypassdomains "Wi-Fi" "127.0.0.1" "localhost" "*.local" "169.254/16"`;
           exec(cmd, (err) => {
             if (err) {
               res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -150,9 +152,9 @@ class DashboardServer {
 
         const ext = path.extname(filePath);
         const mimeTypes = {
-          '.html': 'text/html',
-          '.css': 'text/css',
-          '.js': 'application/javascript',
+          '.html': 'text/html; charset=utf-8',
+          '.css': 'text/css; charset=utf-8',
+          '.js': 'application/javascript; charset=utf-8',
           '.json': 'application/json',
           '.svg': 'image/svg+xml'
         };
@@ -168,7 +170,7 @@ class DashboardServer {
         });
       });
 
-      this.server.listen(this.port, '127.0.0.1', () => {
+      this.server.listen(this.port, '0.0.0.0', () => {
         resolve({ port: this.port });
       });
 

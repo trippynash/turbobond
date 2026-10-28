@@ -280,5 +280,9 @@ document.getElementById('btnRefreshInterfaces').addEventListener('click', async 
   updateStats(data);
 });
 
-// Start app
-document.addEventListener('DOMContentLoaded', bootstrap);
+// Start app immediately or upon DOM ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
+}
