@@ -23,6 +23,7 @@ class DashboardServer {
       ...stats,
       activeConnections: this.proxy.activeConnections,
       totalRequests: this.proxy.totalRequests,
+      proxyPort: this.proxy.port,
       recentRequests: this.proxy.recentRequests.slice(0, 15)
     });
 
@@ -32,6 +33,18 @@ class DashboardServer {
         res.write(msg);
       } catch (e) {}
     }
+  }
+
+  getSystemProxyStatus() {
+    return new Promise((resolve) => {
+      exec('networksetup -getwebproxy "Wi-Fi" 2>/dev/null', (err, stdout) => {
+        if (err || !stdout) return resolve({ enabled: false, port: this.proxy.port });
+        const enabled = /Enabled:\s*Yes/i.test(stdout);
+        const match = stdout.match(/Port:\s*(\d+)/i);
+        const configuredPort = match ? parseInt(match[1], 10) : this.proxy.port;
+        resolve({ enabled: enabled && configuredPort === this.proxy.port, port: configuredPort });
+      });
+    });
   }
 
   start() {
@@ -69,6 +82,7 @@ class DashboardServer {
         if (url.pathname === '/api/status') {
           const stats = interfaceManager.getSnapshot();
           const tether = await tetherManager.getStatus();
+          const systemProxy = await this.getSystemProxyStatus();
           res.writeHead(200, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({
             ...stats,
@@ -76,8 +90,15 @@ class DashboardServer {
             totalRequests: this.proxy.totalRequests,
             proxyPort: this.proxy.port,
             tether,
+            systemProxy,
             recentRequests: this.proxy.recentRequests
           }));
+        }
+
+        if (url.pathname === '/api/system-proxy/status') {
+          const systemProxy = await this.getSystemProxyStatus();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify(systemProxy));
         }
 
         if (url.pathname === '/api/tether/start' && req.method === 'POST') {

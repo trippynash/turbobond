@@ -33,13 +33,42 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PAT
 ACTION="${1:-status}"
 
 is_running() {
-    ps -A -o comm 2>/dev/null | grep -E "(^|/)tetherkit-cli$" >/dev/null 2>&1
-}
-get_ip() {
-    /usr/sbin/ipconfig getifaddr feth0 2>/dev/null || echo ""
+    pgrep -f tetherkit-cli >/dev/null 2>&1
 }
 has_device() {
     /opt/homebrew/bin/tetherkit-cli --list 2>/dev/null | grep -q "Bus "
+}
+get_active_iface() {
+    for dev in $(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep '^feth' | sort -V); do
+        local test_ip=$(/usr/sbin/ipconfig getifaddr "$dev" 2>/dev/null || echo "")
+        if [ -n "$test_ip" ] && [[ ! "$test_ip" =~ ^169\.254\. ]]; then
+            echo "$dev"
+            return 0
+        fi
+    done
+    if [ -f /tmp/tetherkit.log ]; then
+        local log_dev=$(grep -oE "==== interface ready: (feth[0-9]+) ====" /tmp/tetherkit.log 2>/dev/null | tail -n 1 | awk '{print $4}')
+        if [ -n "$log_dev" ] && ifconfig "$log_dev" >/dev/null 2>&1; then
+            echo "$log_dev"
+            return 0
+        fi
+    fi
+    local fallback=$(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep -E '^feth[0-9]+' | sort -V | tail -n 2 | head -n 1)
+    if [ -n "$fallback" ]; then
+        echo "$fallback"
+        return 0
+    fi
+    echo "feth0"
+}
+get_ip() {
+    for dev in $(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep '^feth' | sort -V); do
+        local ip=$(/usr/sbin/ipconfig getifaddr "$dev" 2>/dev/null || echo "")
+        if [ -n "$ip" ] && [[ ! "$ip" =~ ^169\.254\. ]]; then
+            echo "$ip"
+            return 0
+        fi
+    done
+    echo ""
 }
 
 start_tether() {
@@ -47,42 +76,75 @@ start_tether() {
     local cur_ip=$(get_ip)
     if [ -n "$cur_ip" ] && is_running; then echo "SUCCESS:$cur_ip"; exit 0; fi
 
-    if is_running && ! ifconfig feth0 >/dev/null 2>&1; then
-        killall tetherkit-cli 2>/dev/null || true
+    if is_running && [ -z "$cur_ip" ]; then
+        pkill -9 -f tetherkit-cli 2>/dev/null || true
+        killall -9 tetherkit-cli 2>/dev/null || true
         sleep 0.5
     fi
 
     if ! is_running; then
+        for dev in $(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep '^feth'); do
+            ifconfig "$dev" destroy 2>/dev/null || true
+        done
         /opt/homebrew/bin/tetherkit-cli </dev/null >> /tmp/tetherkit.log 2>&1 &
-        sleep 0.5
+        sleep 0.8
     fi
 
+    local iface=""
     local count=0
-    while ! ifconfig feth0 >/dev/null 2>&1; do
+    while [ -z "$iface" ]; do
         sleep 0.5
         count=$((count + 1))
-        if ! is_running || [ "$count" -ge 24 ]; then
-            echo "FAILED_INTERFACE"
+        if ! is_running; then
+            echo "FAILED_INTERFACE: Process exited"
+            exit 3
+        fi
+        local log_dev=$(grep -oE "==== interface ready: (feth[0-9]+) ====" /tmp/tetherkit.log 2>/dev/null | tail -n 1 | awk '{print $4}')
+        if [ -n "$log_dev" ] && ifconfig "$log_dev" >/dev/null 2>&1; then
+            iface="$log_dev"
+            break
+        fi
+        for dev in $(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep '^feth'); do
+            if ifconfig "$dev" >/dev/null 2>&1; then
+                iface="$dev"
+                break
+            fi
+        done
+        if [ "$count" -ge 30 ]; then
+            echo "FAILED_INTERFACE: Timeout waiting for interface"
             exit 3
         fi
     done
 
-    /usr/sbin/ipconfig set feth0 DHCP
+    /usr/sbin/ipconfig set "$iface" DHCP
     local ip=""
     count=0
     while [ -z "$ip" ]; do
         sleep 0.5
         ip=$(get_ip)
         count=$((count + 1))
-        if [ "$count" -ge 24 ]; then echo "FAILED_DHCP"; exit 4; fi
+        if [ "$count" -ge 70 ]; then
+            if is_running; then
+                echo "ACQUIRING"
+                exit 0
+            else
+                echo "FAILED_DHCP"
+                exit 4
+            fi
+        fi
     done
     echo "SUCCESS:$ip"
     exit 0
 }
 
 stop_tether() {
-    killall tetherkit-cli 2>/dev/null || true
-    /usr/sbin/ipconfig set feth0 NONE 2>/dev/null || true
+    pkill -9 -f tetherkit-cli 2>/dev/null || true
+    killall -9 tetherkit-cli 2>/dev/null || true
+    for dev in $(ifconfig -l 2>/dev/null | tr ' ' '\n' | grep '^feth'); do
+        /usr/sbin/ipconfig set "$dev" NONE 2>/dev/null || true
+        ifconfig "$dev" down 2>/dev/null || true
+        ifconfig "$dev" destroy 2>/dev/null || true
+    done
     echo "STOPPED"
     exit 0
 }
@@ -90,7 +152,11 @@ stop_tether() {
 status_tether() {
     if is_running; then
         local ip=$(get_ip)
-        if [ -n "$ip" ]; then echo "RUNNING:$ip"; else echo "ACQUIRING"; fi
+        if [ -n "$ip" ]; then
+            echo "RUNNING:$ip"
+        else
+            echo "ACQUIRING"
+        fi
     else
         echo "STOPPED"
     fi
@@ -100,7 +166,7 @@ case "$ACTION" in
     start) start_tether ;;
     stop) stop_tether ;;
     status) status_tether ;;
-    *) if is_running; then stop_tether; else start_tether; fi ;;
+    *) if is_running && [ -n "$(get_ip)" ]; then stop_tether; else start_tether; fi ;;
 esac
 SUBEOF
     chmod +x "$HELPER"

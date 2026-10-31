@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node ./bin/turbobond.js --open",
+    "start:system": "node ./bin/turbobond.js --open --system-proxy",
     "cli": "node ./bin/turbobond.js",
     "setup:tether": "bash ./scripts/setup-tetherkit.sh"
   },

@@ -27,13 +27,20 @@ class TetherManager {
       exec(`bash "${this.tetherScript}" status 2>/dev/null`, (err, stdout) => {
         const out = (stdout || '').trim();
         let running = false;
+        let acquiring = false;
         let ip = null;
 
         if (out.startsWith('RUNNING:')) {
-          running = true;
-          ip = out.substring(8);
+          const detectedIp = out.substring(8);
+          if (detectedIp && !detectedIp.startsWith('169.254.')) {
+            running = true;
+            ip = detectedIp;
+          } else {
+            acquiring = true;
+            ip = 'Acquiring IP...';
+          }
         } else if (out === 'ACQUIRING') {
-          running = true;
+          acquiring = true;
           ip = 'Acquiring IP...';
         }
 
@@ -41,6 +48,7 @@ class TetherManager {
           deviceAttached: device.attached,
           deviceName: device.deviceName,
           running,
+          acquiring,
           ip,
           interfaceName: 'feth0'
         });
@@ -53,11 +61,24 @@ class TetherManager {
       const appleScript = `do shell script "${this.tetherScript} start" with administrator privileges`;
       exec(`osascript -e '${appleScript}'`, (err, stdout, stderr) => {
         if (err) {
-          return reject(new Error(stderr || err.message));
+          // Check if interface is actually acquiring or already has an IP
+          return exec(`bash "${this.tetherScript}" status 2>/dev/null`, (sErr, sStdout) => {
+            const out = (sStdout || '').trim();
+            if (out.startsWith('RUNNING:')) {
+              return resolve({ success: true, ip: out.substring(8) });
+            }
+            if (out === 'ACQUIRING') {
+              return resolve({ success: true, acquiring: true });
+            }
+            return reject(new Error(stderr || err.message));
+          });
         }
         const res = (stdout || '').trim();
         if (res.startsWith('SUCCESS:')) {
           return resolve({ success: true, ip: res.substring(8) });
+        }
+        if (res === 'ACQUIRING') {
+          return resolve({ success: true, acquiring: true });
         }
         if (res === 'NO_DEVICE') {
           return reject(new Error('No Android USB device detected. Please connect phone and enable USB Tethering.'));
@@ -72,7 +93,14 @@ class TetherManager {
       const appleScript = `do shell script "${this.tetherScript} stop" with administrator privileges`;
       exec(`osascript -e '${appleScript}'`, (err, stdout, stderr) => {
         if (err) {
-          return reject(new Error(stderr || err.message));
+          // If already stopped or pgrep returns empty, treat as success
+          exec('pgrep -f tetherkit-cli', (pErr, pStdout) => {
+            if (pErr || !pStdout.trim()) {
+              return resolve({ success: true });
+            }
+            return reject(new Error(stderr || err.message));
+          });
+          return;
         }
         resolve({ success: true });
       });

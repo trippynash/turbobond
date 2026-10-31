@@ -75,34 +75,77 @@ npm run setup:tether
 
 ### 3. Start TurboBond & Dashboard
 ```bash
+# Standard start (opens dashboard on http://localhost:9999)
 npm start
+
+# Or start with automatic macOS System Proxy enabled (bonds all web traffic immediately)
+npm run start:system
+
+# Or run on custom ports (if 8080 or 9999 is used by other dev tools)
+TURBOBOND_PROXY_PORT=8888 TURBOBOND_DASHBOARD_PORT=9998 npm start
 ```
-This starts the Multi-WAN Proxy on `127.0.0.1:8080` and automatically opens the Web Dashboard at **`http://localhost:9999`**.
+This starts the Multi-WAN Proxy on `127.0.0.1:8080` (or your custom port) and opens the Web Dashboard at **`http://localhost:9999`**.
+
+> [!NOTE]
+> **Why does macOS only use Wi-Fi by default?**  
+> macOS uses a strict single-gateway priority. When both Wi-Fi and USB Tethering are plugged in, macOS routes 100% of standard system traffic through whichever adapter is #1 in Network Service Order (usually Wi-Fi), leaving USB Tethering with 0 B/s.  
+> To bond both links, either **click "Enable System Proxy" in the TurboBond Web Dashboard** or point your applications to `127.0.0.1:8080`.
 
 ---
 
 ## 🛠️ How to Connect Your Apps
 
-### 1. NeatDownloadManager (Maximum Download Acceleration)
+### 1. System-Wide Aggregation (Easiest — 1 Click)
+Simply click **"⚡ Enable System Proxy Now"** on the TurboBond Web Dashboard banner, or run:
+```bash
+networksetup -setwebproxy "Wi-Fi" 127.0.0.1 8080 && networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 8080
+```
+All standard browser traffic (Safari, Chrome, Brave, Edge, etc.) will instantly be split 50/50 between Wi-Fi and USB Tethering.
+
+### 2. NeatDownloadManager (Maximum Download Acceleration)
 1. Open **NeatDownloadManager**.
 2. Click **Settings** (Gear icon) > **Network Proxy**.
 3. Check **Use Proxy** > Set Host: `127.0.0.1`, Port: `8080`.
 4. *Result*: Every segmented download part is pulled across your connected phones and Wi-Fi simultaneously!
 
-### 2. Google Chrome / Brave (Multi-WAN Streaming)
+### 3. Google Chrome / Brave (Multi-WAN Streaming)
 Launch Chrome using the proxy flag:
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server="127.0.0.1:8080"
 ```
-Or toggle the **System Proxy** button directly inside the TurboBond Web Dashboard!
 
-### 3. Terminal & Dev Tools (git, npm, curl)
-In any terminal session:
+### 4. Terminal & Dev Tools (git, npm, curl)
+
+#### A. One-Line Command Prefix (Recommended)
+Accelerate single commands across all bonded pipes without leaving persistent environment variables:
+```bash
+ALL_PROXY=http://127.0.0.1:8080 git clone <repo>
+ALL_PROXY=http://127.0.0.1:8080 npm install
+ALL_PROXY=http://127.0.0.1:8080 curl -O <url>
+```
+
+#### B. Session-Wide Export
+To route all CLI tools in your current terminal session through TurboBond:
 ```bash
 export ALL_PROXY=http://127.0.0.1:8080
 export HTTP_PROXY=http://127.0.0.1:8080
 export HTTPS_PROXY=http://127.0.0.1:8080
 ```
+
+#### C. How to Unset / Restore Default
+When you finish using TurboBond in that session, restore standard direct routing:
+```bash
+unset ALL_PROXY HTTP_PROXY HTTPS_PROXY
+```
+
+> [!TIP]
+> **Will other applications on port 8080 be affected?**
+> * **Tab-Scoped:** `export` only affects the current terminal tab — closing the window or opening a new tab resets it automatically.
+> * **Port Collisions:** If another app (Docker, Tomcat, local dev server) needs port `8080`, run TurboBond on a custom port to avoid collisions:
+>   ```bash
+>   TURBOBOND_PROXY_PORT=8888 TURBOBOND_DASHBOARD_PORT=9998 npm start
+>   ```
+> * **Leftover Variables:** If TurboBond is closed while `export` is still active, terminal tools will return `Connection refused`. Simply run the `unset` command above or close the tab.
 
 ---
 

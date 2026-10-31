@@ -64,8 +64,9 @@ class InterfaceManager extends EventEmitter {
         continue;
       }
       for (const a of addrs) {
-        if (a.family === 'IPv4' && !a.internal && a.address && !a.address.startsWith('127.')) {
+        if (a.family === 'IPv4' && !a.internal && a.address && !a.address.startsWith('127.') && !a.address.startsWith('169.254.')) {
           const info = this.getFriendlyType(name);
+          const existing = this.interfaces.find(i => i.name === name);
           active.push({
             name,
             address: a.address,
@@ -74,7 +75,7 @@ class InterfaceManager extends EventEmitter {
             type: info.type,
             label: info.label,
             icon: info.icon,
-            requestCount: 0
+            requestCount: existing ? (existing.requestCount || 0) : 0
           });
         }
       }

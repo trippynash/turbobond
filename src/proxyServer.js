@@ -34,16 +34,24 @@ class ProxyServer {
     return new Promise((resolve, reject) => {
       this.server = http.createServer((req, res) => {
         const iface = interfaceManager.getNextInterface();
-        const parsedUrl = url.parse(req.url);
+        let targetHost = '';
+        let targetPort = 80;
+        let targetPath = req.url;
 
-        const targetHost = (parsedUrl.hostname || req.headers.host || '').split(':')[0];
-        const targetPort = parsedUrl.port || 80;
+        try {
+          const parsedUrl = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
+          targetHost = (parsedUrl.hostname || req.headers.host || '').split(':')[0];
+          targetPort = parseInt(parsedUrl.port, 10) || 80;
+          targetPath = parsedUrl.pathname + parsedUrl.search;
+        } catch (e) {
+          targetHost = (req.headers.host || '').split(':')[0];
+        }
 
         const isIPv4 = iface && net.isIPv4(iface.address);
         const options = {
           hostname: targetHost,
           port: targetPort,
-          path: parsedUrl.path,
+          path: targetPath,
           method: req.method,
           headers: req.headers,
           localAddress: iface ? iface.address : undefined,
@@ -105,8 +113,12 @@ class ProxyServer {
           serverSocket.pipe(clientSocket);
           clientSocket.pipe(serverSocket);
 
+          let closed = false;
           const onClose = () => {
-            this.activeConnections = Math.max(0, this.activeConnections - 1);
+            if (!closed) {
+              closed = true;
+              this.activeConnections = Math.max(0, this.activeConnections - 1);
+            }
           };
           clientSocket.on('close', onClose);
           serverSocket.on('close', onClose);

@@ -5,6 +5,7 @@ const { startTurboBond } = require('../src/index');
 
 const args = process.argv.slice(2);
 const shouldOpen = args.includes('--open') || args.includes('-o');
+const enableSysProxy = args.includes('--system-proxy') || args.includes('-s');
 
 const proxyPort = parseInt(process.env.TURBOBOND_PROXY_PORT, 10) || 8080;
 const dashboardPort = parseInt(process.env.TURBOBOND_DASHBOARD_PORT, 10) || 9999;
@@ -20,6 +21,15 @@ startTurboBond({ proxyPort, dashboardPort }).then((instance) => {
   console.log(`  • \x1b[1mMulti-WAN Proxy Server:\x1b[0m  http://127.0.0.1:${proxyPort}`);
   console.log(`  • \x1b[1mReal-Time Dashboard:\x1b[0m     \x1b[1;34mhttp://localhost:${dashboardPort}\x1b[0m`);
 
+  if (enableSysProxy) {
+    try {
+      execSync(`networksetup -setwebproxy "Wi-Fi" 127.0.0.1 ${proxyPort} && networksetup -setsecurewebproxy "Wi-Fi" 127.0.0.1 ${proxyPort} && networksetup -setproxybypassdomains "Wi-Fi" "127.0.0.1" "localhost" "*.local" "169.254/16"`);
+      console.log('  • \x1b[1;32mSystem Proxy:\x1b[0m            \x1b[32mENABLED on Wi-Fi (Multi-WAN Aggregation ACTIVE)\x1b[0m');
+    } catch (e) {
+      console.warn('  • \x1b[1;33mSystem Proxy:\x1b[0m            Could not automatically set Wi-Fi proxy:', e.message);
+    }
+  }
+
   console.log('\n\x1b[1;33m📡 Initial Detected Interfaces:\x1b[0m');
   if (ifaces.length === 0) {
     console.log('  \x1b[90m(Scanning for interfaces...)\x1b[0m');
@@ -30,9 +40,10 @@ startTurboBond({ proxyPort, dashboardPort }).then((instance) => {
   }
 
   console.log('\n\x1b[1m💡 How to use with apps:\x1b[0m');
-  console.log(`  • \x1b[33mNeatDownloadManager:\x1b[0m Settings -> Network Proxy -> 127.0.0.1:${proxyPort}`);
-  console.log(`  • \x1b[33mChrome / Brave:\x1b[0m      open -na "Google Chrome" --args --proxy-server="127.0.0.1:${proxyPort}"`);
-  console.log(`  • \x1b[33mTerminal:\x1b[0m            export ALL_PROXY=http://127.0.0.1:${proxyPort}\n`);
+  console.log(`  • \x1b[33mSystem Proxy:\x1b[0m         Toggle in Dashboard (http://localhost:${dashboardPort}) or pass --system-proxy`);
+  console.log(`  • \x1b[33mNeatDownloadManager:\x1b[0m  Settings -> Network Proxy -> 127.0.0.1:${proxyPort}`);
+  console.log(`  • \x1b[33mChrome / Brave:\x1b[0m       open -na "Google Chrome" --args --proxy-server="127.0.0.1:${proxyPort}"`);
+  console.log(`  • \x1b[33mTerminal:\x1b[0m             export ALL_PROXY=http://127.0.0.1:${proxyPort}\n`);
 
   if (shouldOpen) {
     exec(`open http://localhost:${dashboardPort}`);

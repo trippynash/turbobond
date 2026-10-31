@@ -196,7 +196,71 @@ button {
   font-size: 0.82rem;
   text-decoration: underline;
 }
-.btn-ghost:hover { color: var(--cyan); }
+/* Banner Section */
+.banner-section {
+  margin-bottom: 24px;
+}
+
+.system-proxy-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-radius: 16px;
+  background: var(--bg-card);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.system-proxy-banner.warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(18, 24, 38, 0.9));
+  box-shadow: 0 0 25px rgba(245, 158, 11, 0.08);
+}
+
+.system-proxy-banner.active {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.12), rgba(18, 24, 38, 0.9));
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.08);
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.banner-icon-badge {
+  font-size: 1.4rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.banner-text h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+.banner-text p {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.banner-action {
+  flex-shrink: 0;
+}
 
 /* Hero Stats */
 .hero-stats {
@@ -384,25 +448,26 @@ button {
 
 .iface-rates {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
   margin-bottom: 12px;
   background: rgba(0, 0, 0, 0.25);
-  padding: 10px 14px;
+  padding: 10px 12px;
   border-radius: 10px;
 }
 
 .rate-item span {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-dim);
   display: block;
 }
 .rate-item strong {
   font-family: var(--font-mono);
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 .rate-item.down strong { color: var(--emerald); }
 .rate-item.up strong { color: var(--blue); }
+.rate-item.reqs strong { color: var(--cyan); }
 
 /* Mini Sparkline Chart */
 .sparkline-box {

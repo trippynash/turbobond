@@ -47,6 +47,22 @@
 
     <!-- Main Container -->
     <main class="main-content">
+      <!-- System Proxy Guidance Banner -->
+      <section class="banner-section" id="bannerSection">
+        <div class="system-proxy-banner warning" id="proxyStatusBanner">
+          <div class="banner-content">
+            <div class="banner-icon-badge" id="bannerIconBadge">⚠️</div>
+            <div class="banner-text">
+              <h3 id="bannerTitle">macOS is routing traffic through Wi-Fi only</h3>
+              <p id="bannerDesc">macOS default gateway ignores secondary connections like USB Tethering. Enable System Proxy to bond both networks immediately.</p>
+            </div>
+          </div>
+          <div class="banner-action">
+            <button class="btn-primary" id="btnBannerProxyToggle">⚡ Enable System Proxy Now</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Aggregated Bandwidth Hero -->
       <section class="hero-stats">
         <div class="stat-card primary">
@@ -102,7 +118,7 @@
             <div class="tether-ip" id="tetherIp">--</div>
           </div>
           <div class="tether-actions">
-            <button class="btn-primary" id="btnTetherToggle">Start Tethering</button>
+            <button class="btn-primary" id="btnTetherToggle">Connect USB Tethering</button>
             <button class="btn-ghost" id="btnTetherLogs" title="View TetherKit Logs">Logs</button>
           </div>
         </div>
@@ -142,14 +158,14 @@
         <div class="panel">
           <div class="panel-header">
             <h3>Quick Setup Guide</h3>
-            <span class="badge success">Active on 8080</span>
+            <span class="badge success" id="guideBadge">Active on 8080</span>
           </div>
           <div class="setup-guide">
             <div class="guide-item">
               <span class="guide-num">1</span>
               <div>
                 <strong>NeatDownloadManager (Speed Multiplier)</strong>
-                <p>Open NeatDownloadManager > <em>Settings > Network Proxy</em> > Check <em>Use Proxy</em>: <code>127.0.0.1</code> Port: <code>8080</code>.</p>
+                <p>Open NeatDownloadManager > <em>Settings > Network Proxy</em> > Check <em>Use Proxy</em>: <code>127.0.0.1</code> Port: <code id="guidePort">8080</code>.</p>
               </div>
             </div>
 
@@ -159,8 +175,8 @@
                 <strong>Google Chrome / Brave (YouTube & Streaming)</strong>
                 <p>Launch Chrome with multi-WAN proxy:</p>
                 <div class="code-box">
-                  <code>/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server="127.0.0.1:8080"</code>
-                  <button class="btn-copy-code" data-copy="/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server=&quot;127.0.0.1:8080&quot;">Copy</button>
+                  <code id="guideChromeCode">/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server="127.0.0.1:8080"</code>
+                  <button class="btn-copy-code" id="btnCopyChromeCode" data-copy="/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --proxy-server=&quot;127.0.0.1:8080&quot;">Copy</button>
                 </div>
               </div>
             </div>
@@ -170,8 +186,8 @@
               <div>
                 <strong>Terminal & Dev Tools (git, npm, curl)</strong>
                 <div class="code-box">
-                  <code>export ALL_PROXY=http://127.0.0.1:8080</code>
-                  <button class="btn-copy-code" data-copy="export ALL_PROXY=http://127.0.0.1:8080">Copy</button>
+                  <code id="guideTerminalCode">export ALL_PROXY=http://127.0.0.1:8080</code>
+                  <button class="btn-copy-code" id="btnCopyTerminalCode" data-copy="export ALL_PROXY=http://127.0.0.1:8080">Copy</button>
                 </div>
               </div>
             </div>

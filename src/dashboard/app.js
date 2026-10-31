@@ -1,6 +1,35 @@
 // TurboBond Real-Time Client Application
 let currentTetherState = null;
 let systemProxyEnabled = false;
+let currentProxyPort = 8080;
+
+function updateProxyPortUI(port) {
+  if (!port || port === currentProxyPort) return;
+  currentProxyPort = port;
+
+  const endpointEl = document.getElementById('proxyEndpoint');
+  if (endpointEl) endpointEl.textContent = `127.0.0.1:${port}`;
+
+  const guideBadge = document.getElementById('guideBadge');
+  if (guideBadge) guideBadge.textContent = `Active on ${port}`;
+
+  const guidePort = document.getElementById('guidePort');
+  if (guidePort) guidePort.textContent = port;
+
+  const chromeCmd = `/Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --proxy-server="127.0.0.1:${port}"`;
+  const guideChromeCode = document.getElementById('guideChromeCode');
+  if (guideChromeCode) guideChromeCode.textContent = chromeCmd;
+
+  const btnCopyChrome = document.getElementById('btnCopyChromeCode');
+  if (btnCopyChrome) btnCopyChrome.setAttribute('data-copy', chromeCmd);
+
+  const termCmd = `export ALL_PROXY=http://127.0.0.1:${port}`;
+  const guideTermCode = document.getElementById('guideTerminalCode');
+  if (guideTermCode) guideTermCode.textContent = termCmd;
+
+  const btnCopyTerm = document.getElementById('btnCopyTerminalCode');
+  if (btnCopyTerm) btnCopyTerm.setAttribute('data-copy', termCmd);
+}
 
 function formatSpeed(bytesPerSec) {
   if (bytesPerSec < 1024) return { val: bytesPerSec.toFixed(0), unit: 'B/s' };
@@ -72,6 +101,10 @@ function renderInterfaces(interfaces) {
             <span>UPLOAD</span>
             <strong>${up.val} <small>${up.unit}</small></strong>
           </div>
+          <div class="rate-item reqs">
+            <span>DISPATCHED</span>
+            <strong>${iface.requestCount || 0} <small>reqs</small></strong>
+          </div>
         </div>
 
         <div class="sparkline-box">
@@ -110,28 +143,43 @@ function updateTetherWidget(tether) {
   const ipEl = document.getElementById('tetherIp');
   const btn = document.getElementById('btnTetherToggle');
 
-  if (tether.running) {
+  // Case 1: Actively Connected with valid IP
+  if (tether.running && tether.ip && tether.ip !== 'Acquiring IP...') {
     badge.className = 'badge success';
     badge.textContent = 'Connected';
     deviceEl.textContent = tether.deviceName || 'Android Connected';
-    ipEl.textContent = `IP: ${tether.ip || 'feth0 active'}`;
+    ipEl.textContent = `IP: ${tether.ip}`;
     btn.textContent = 'Disconnect Tethering';
     btn.className = 'btn-secondary';
     btn.disabled = false;
-  } else if (tether.deviceAttached) {
+  }
+  // Case 2: Acquiring IP / Connecting in progress
+  else if (tether.acquiring || tether.ip === 'Acquiring IP...') {
+    badge.className = 'badge warning';
+    badge.textContent = 'Connecting...';
+    deviceEl.textContent = tether.deviceName || 'Android Attached';
+    ipEl.textContent = 'Acquiring IP...';
+    btn.textContent = 'Cancel / Disconnect';
+    btn.className = 'btn-secondary';
+    btn.disabled = false;
+  }
+  // Case 3: Device Attached & Ready to Connect
+  else if (tether.deviceAttached) {
     badge.className = 'badge warning';
     badge.textContent = 'Device Ready';
     deviceEl.textContent = tether.deviceName || 'Android Attached';
     ipEl.textContent = 'Ready to launch';
-    btn.textContent = '⚡ Start Tethering';
+    btn.textContent = '⚡ Connect USB Tethering';
     btn.className = 'btn-primary';
     btn.disabled = false;
-  } else {
+  }
+  // Case 4: No Device Connected
+  else {
     badge.className = 'badge danger';
     badge.textContent = 'No Device';
     deviceEl.textContent = 'No USB Tethering device detected';
     ipEl.textContent = 'Connect phone via USB';
-    btn.textContent = 'Start Tethering';
+    btn.textContent = 'Connect USB Tethering';
     btn.className = 'btn-primary';
     btn.disabled = true;
   }
@@ -160,6 +208,9 @@ function updateStats(data) {
   document.getElementById('totalUpBytes').textContent = formatBytes(totalUpBytes);
 
   renderInterfaces(data.interfaces || []);
+  if (data.proxyPort) {
+    updateProxyPortUI(data.proxyPort);
+  }
   if (data.recentRequests) {
     renderStreamLog(data.recentRequests);
   }
@@ -179,25 +230,97 @@ function setupSSE() {
   };
 }
 
+// Update System Proxy State & UI
+function updateSystemProxyUI(enabled) {
+  systemProxyEnabled = Boolean(enabled);
+  const label = document.getElementById('systemProxyLabel');
+  const btnHeader = document.getElementById('btnSystemProxyToggle');
+  const banner = document.getElementById('proxyStatusBanner');
+  const bannerIcon = document.getElementById('bannerIconBadge');
+  const bannerTitle = document.getElementById('bannerTitle');
+  const bannerDesc = document.getElementById('bannerDesc');
+  const bannerBtn = document.getElementById('btnBannerProxyToggle');
+
+  if (systemProxyEnabled) {
+    if (label) label.textContent = 'System Proxy: ON';
+    if (btnHeader) {
+      btnHeader.style.borderColor = '#10b981';
+      btnHeader.style.color = '#10b981';
+    }
+    if (banner) {
+      banner.className = 'system-proxy-banner active';
+    }
+    if (bannerIcon) bannerIcon.textContent = '⚡';
+    if (bannerTitle) bannerTitle.textContent = 'Multi-WAN Aggregation Active — All Mac Web Traffic is Bonded';
+    if (bannerDesc) bannerDesc.textContent = 'macOS HTTP & HTTPS traffic is dynamically distributed across Wi-Fi and USB Tethering in real time.';
+    if (bannerBtn) {
+      bannerBtn.textContent = 'Disable System Proxy';
+      bannerBtn.className = 'btn-secondary';
+    }
+  } else {
+    if (label) label.textContent = 'System Proxy: Off';
+    if (btnHeader) {
+      btnHeader.style.borderColor = '';
+      btnHeader.style.color = '';
+    }
+    if (banner) {
+      banner.className = 'system-proxy-banner warning';
+    }
+    if (bannerIcon) bannerIcon.textContent = '⚠️';
+    if (bannerTitle) bannerTitle.textContent = 'macOS is routing traffic through Wi-Fi only';
+    if (bannerDesc) bannerDesc.textContent = 'macOS default gateway ignores secondary connections like USB Tethering. Enable System Proxy below to bond both networks immediately.';
+    if (bannerBtn) {
+      bannerBtn.textContent = '⚡ Enable System Proxy Now';
+      bannerBtn.className = 'btn-primary';
+    }
+  }
+}
+
+async function toggleSystemProxy() {
+  const endpoint = systemProxyEnabled ? '/api/system-proxy/disable' : '/api/system-proxy/enable';
+  try {
+    const res = await fetch(endpoint, { method: 'POST' });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    updateSystemProxyUI(data.enabled);
+  } catch (err) {
+    alert(`Failed to toggle system proxy: ${err.message}`);
+  }
+}
+
 // Initial bootstrap
 async function bootstrap() {
   try {
     const res = await fetch('/api/status');
     const data = await res.json();
     updateStats(data);
+    if (data.proxyPort) {
+      updateProxyPortUI(data.proxyPort);
+    }
     if (data.tether) {
       updateTetherWidget(data.tether);
+    }
+    if (data.systemProxy) {
+      updateSystemProxyUI(data.systemProxy.enabled);
     }
   } catch (err) {}
 
   setupSSE();
 
-  // Poll tether status every 3 seconds
+  // Poll status every 3 seconds to keep tether and proxy in sync
   setInterval(async () => {
     try {
-      const res = await fetch('/api/tether/status');
-      const tether = await res.json();
-      updateTetherWidget(tether);
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      if (data.proxyPort) {
+        updateProxyPortUI(data.proxyPort);
+      }
+      if (data.tether) {
+        updateTetherWidget(data.tether);
+      }
+      if (data.systemProxy) {
+        updateSystemProxyUI(data.systemProxy.enabled);
+      }
     } catch (e) {}
   }, 3000);
 }
@@ -205,7 +328,7 @@ async function bootstrap() {
 // Event Listeners
 document.getElementById('btnTetherToggle').addEventListener('click', async () => {
   const btn = document.getElementById('btnTetherToggle');
-  const isRunning = currentTetherState && currentTetherState.running;
+  const isRunning = currentTetherState && (currentTetherState.running || currentTetherState.acquiring || currentTetherState.ip === 'Acquiring IP...');
   const endpoint = isRunning ? '/api/tether/stop' : '/api/tether/start';
 
   btn.disabled = true;
@@ -214,11 +337,16 @@ document.getElementById('btnTetherToggle').addEventListener('click', async () =>
   try {
     const res = await fetch(endpoint, { method: 'POST' });
     const result = await res.json();
-    if (result.error) {
-      alert(`Error: ${result.error}`);
+    if (result.error && !result.acquiring) {
+      // Re-check status before alerting to avoid false alarms when DHCP completes slightly late
+      const checkRes = await fetch('/api/tether/status');
+      const checkData = await checkRes.json();
+      if (!checkData.running && !checkData.acquiring) {
+        alert(`Tethering: ${result.error}`);
+      }
     }
   } catch (err) {
-    alert(`Failed: ${err.message}`);
+    console.error('Tether action failed:', err);
   } finally {
     const statusRes = await fetch('/api/tether/status');
     const tether = await statusRes.json();
@@ -245,7 +373,7 @@ document.getElementById('btnCloseLogs').addEventListener('click', () => {
 
 // Copy Buttons
 document.getElementById('btnCopyProxy').addEventListener('click', () => {
-  navigator.clipboard.writeText('127.0.0.1:8080');
+  navigator.clipboard.writeText(`127.0.0.1:${currentProxyPort}`);
   const btn = document.getElementById('btnCopyProxy');
   btn.style.color = '#10b981';
   setTimeout(() => { btn.style.color = ''; }, 1500);
@@ -260,19 +388,12 @@ document.querySelectorAll('.btn-copy-code').forEach(btn => {
   });
 });
 
-// System Proxy Toggle
-document.getElementById('btnSystemProxyToggle').addEventListener('click', async () => {
-  const endpoint = systemProxyEnabled ? '/api/system-proxy/disable' : '/api/system-proxy/enable';
-  try {
-    const res = await fetch(endpoint, { method: 'POST' });
-    const data = await res.json();
-    systemProxyEnabled = data.enabled;
-    document.getElementById('systemProxyLabel').textContent = `System Proxy: ${systemProxyEnabled ? 'ON' : 'Off'}`;
-    document.getElementById('btnSystemProxyToggle').style.borderColor = systemProxyEnabled ? '#10b981' : '';
-  } catch (err) {
-    alert(`Failed to toggle system proxy: ${err.message}`);
-  }
-});
+// System Proxy Toggles
+document.getElementById('btnSystemProxyToggle').addEventListener('click', toggleSystemProxy);
+const btnBanner = document.getElementById('btnBannerProxyToggle');
+if (btnBanner) {
+  btnBanner.addEventListener('click', toggleSystemProxy);
+}
 
 document.getElementById('btnRefreshInterfaces').addEventListener('click', async () => {
   const res = await fetch('/api/status');
